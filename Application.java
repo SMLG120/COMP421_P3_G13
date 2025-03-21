@@ -35,7 +35,9 @@ public class Application {
                     int shareID = scanner.nextInt();
                     System.out.print("Enter amount: ");
                     double amount = scanner.nextDouble();
-                    app.buyShares(userEmail, tickerSymbol, shareID, amount);
+                    System.out.print("Enter portfolio ID: ");
+                    int portfolioID = scanner.nextInt();
+                    app.buyShares(userEmail, tickerSymbol, shareID, amount, portfolioID);
                     break;
                 case 3:
                     System.out.print("Enter user email: ");

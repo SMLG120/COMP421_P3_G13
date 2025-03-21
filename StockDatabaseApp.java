@@ -42,36 +42,60 @@ public class StockDatabaseApp {
         }
     }
 
-    public void buyShares(String userEmail, String tickerSymbol, int shareID, double amount) {
+    public void buyShares(String userEmail, String tickerSymbol, int shareID, double amount, int portfolioID) {
         String checkBalance = "SELECT balance FROM User WHERE email = ?";
         String getMaxTransactionID = "SELECT COALESCE(MAX(transactionID), 0) + 1 FROM InvestmentTransactions";
+        String validatePortfolio = "SELECT portfolioID FROM Account WHERE portfolioID = ? AND \"USER\" = ?";
+
         String insertTransaction = "INSERT INTO InvestmentTransactions "
                 + "(transactionID, transactionDate, currency, amount, status, transactionOperationType, BrokerageFee, ShareTickerSymbol, ShareID, User) "
                 + "VALUES (?, CURRENT_DATE, 'USD', ?, 'Completed', 'Buy', 10.00, ?, ?, ?)";
+        String insertAccountShare = "INSERT INTO AccountAndShares (shareID, tickerSymbol, portfolioID) VALUES (?, ?, ?)";
 
         try (PreparedStatement balanceStmt = conn.prepareStatement(checkBalance);
              PreparedStatement maxIdStmt = conn.prepareStatement(getMaxTransactionID);
-             ResultSet maxIdResult = maxIdStmt.executeQuery();
-             PreparedStatement insertStmt = conn.prepareStatement(insertTransaction)) {
+             PreparedStatement validatePortfolioStmt = conn.prepareStatement(validatePortfolio);
+             PreparedStatement insertTransactionStmt = conn.prepareStatement(insertTransaction);
+             PreparedStatement insertAccountShareStmt = conn.prepareStatement(insertAccountShare)) {
 
+            // Check if the user has sufficient balance
             balanceStmt.setString(1, userEmail);
-            ResultSet rs = balanceStmt.executeQuery();
+            ResultSet balanceResult = balanceStmt.executeQuery();
 
-            if (rs.next() && rs.getDouble("balance") >= amount) {
-                int newTransactionID = 1; // Default to 1 if no transactions exist
+            if (balanceResult.next() && balanceResult.getDouble("balance") >= amount) {
+
+                // Check if the portfolioID is valid for this user
+                validatePortfolioStmt.setInt(1, portfolioID);
+                validatePortfolioStmt.setString(2, userEmail);
+                ResultSet portfolioResult = validatePortfolioStmt.executeQuery();
+
+                if (!portfolioResult.next()) {
+                    System.out.println("Invalid portfolio ID for the given user.");
+                    return;
+                }
+
+                // Get new transaction ID
+                ResultSet maxIdResult = maxIdStmt.executeQuery();
+                int newTransactionID = 1;
                 if (maxIdResult.next()) {
                     newTransactionID = maxIdResult.getInt(1);
                 }
 
-                insertStmt.setInt(1, newTransactionID);
-                insertStmt.setDouble(2, amount);
-                insertStmt.setString(3, tickerSymbol);
-                insertStmt.setInt(4, shareID);
-                insertStmt.setString(5, userEmail);
-
-                int rowsAffected = insertStmt.executeUpdate();
+                // Insert investment transaction
+                insertTransactionStmt.setInt(1, newTransactionID);
+                insertTransactionStmt.setDouble(2, amount);
+                insertTransactionStmt.setString(3, tickerSymbol);
+                insertTransactionStmt.setInt(4, shareID);
+                insertTransactionStmt.setString(5, userEmail);
+                int rowsAffected = insertTransactionStmt.executeUpdate();
 
                 if (rowsAffected > 0) {
+                    // Insert into AccountAndShares table
+                    insertAccountShareStmt.setInt(1, shareID);
+                    insertAccountShareStmt.setString(2, tickerSymbol);
+                    insertAccountShareStmt.setInt(3, portfolioID);
+                    insertAccountShareStmt.executeUpdate();
+
                     System.out.println("Transaction successful! Transaction ID: " + newTransactionID);
                 }
             } else {
@@ -81,6 +105,7 @@ public class StockDatabaseApp {
             e.printStackTrace();
         }
     }
+
 
 
 
