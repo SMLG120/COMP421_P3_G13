@@ -10,7 +10,7 @@ public class StockDatabaseApp {
             String url = "jdbc:db2://winter2025-comp421.cs.mcgill.ca:50000/comp421"; // Double check if it's the right link!!!!
             String user = "cs421g13"; // Not sure
             String password = "COMP421team"; // Also not sure
-
+        
             conn = DriverManager.getConnection(url, user, password);
             System.out.println("Connected to DB2 successfully!");
         } catch (SQLException e) {

@@ -5,11 +5,11 @@ import java.util.Scanner;
 public class Application {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
-        StockDatabaseApp app = new StockDatabaseApp();  // Assuming this is your main class
+        StockDatabaseApp app = new StockDatabaseApp();
 
         while (true) {
             System.out.println("\nStock Management System - Main Menu:");
-            System.out.println("1. View all shares in a user’s portfolio");
+            System.out.println("1. View all shares in a user's portfolio");
             System.out.println("2. Buy shares (Investment Transaction)");
             System.out.println("3. Sell shares (Investment Transaction)");
             System.out.println("4. View transaction history for a stock");
@@ -62,6 +62,7 @@ public class Application {
                     return;
                 default:
                     System.out.println("Invalid choice. Please try again.");
+                    try { Thread.sleep(2000); } catch (Exception e) {}
             }
         }
     }
