@@ -16,6 +16,10 @@ class simpleJDBC
         else
           tableName += "exampletbl";
 
+        // Register the driver.  You must register the driver before you can use it.
+        try { DriverManager.registerDriver ( new com.ibm.db2.jcc.DB2Driver() ) ; }
+        catch (Exception cnfe){ System.out.println("Class not found"); }
+
         // This is the url you must use for DB2.
         //Note: This url may not valid now ! Check for the correct year and semester and server name.
         String url = "jdbc:db2://winter2025-comp421.cs.mcgill.ca:50000/comp421";
