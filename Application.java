@@ -9,7 +9,7 @@ public class Application {
 
         while (true) {
             System.out.println("\nStock Management System - Main Menu:");
-            System.out.println("1. View all shares in a user's portfolio");
+            System.out.println("1. View all shares from a user");
             System.out.println("2. Buy shares (Investment Transaction)");
             System.out.println("3. Sell shares (Investment Transaction)");
             System.out.println("4. View transaction history for a stock");

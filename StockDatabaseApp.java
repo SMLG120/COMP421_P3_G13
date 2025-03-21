@@ -18,38 +18,56 @@ public class StockDatabaseApp {
         }
     }
     public void viewUserPortfolio(String userEmail) {
-        String sql = """
-    SELECT a.portfolioName, s.tickerSymbol, s.shareID, s.currentPrice 
-    FROM AccountAndShares aas
-    JOIN Shares s ON aas.shareID = s.shareID AND aas.tickerSymbol = s.tickerSymbol
-    JOIN Account a ON aas.portfolioID = a.portfolioID
-    WHERE a.User = ?;
-    """;
+        // First, check if the user exists in the Account table
+        String checkUserSql = "SELECT * FROM Account WHERE \"USER\" = ? LIMIT 1";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, userEmail);
-            ResultSet rs = pstmt.executeQuery();
+        try (PreparedStatement checkUserStmt = conn.prepareStatement(checkUserSql)) {
+            checkUserStmt.setString(1, userEmail);
+            ResultSet userRs = checkUserStmt.executeQuery();
 
-            // Check if any rows were returned
-            boolean hasResults = false;
-
-            while (rs.next()) {
-                hasResults = true; // At least one row exists
-                System.out.printf("Portfolio: %s | Stock: %s | Share ID: %d | Price: %.2f\n",
-                        rs.getString("portfolioName"),
-                        rs.getString("tickerSymbol"),
-                        rs.getInt("shareID"),
-                        rs.getDouble("currentPrice"));
+            if (!userRs.next()) {
+                // User not found
+                System.out.println("User with email " + userEmail + " is not associated with any portfolio.");
+                return; // Exit the method if user is not found
             }
 
-            // If no results, print a message
-            if (!hasResults) {
-                System.out.println("No portfolio found for the user: " + userEmail);
+            // Now that we know the user exists, proceed with fetching the portfolio details
+            String sql = """
+        SELECT a.portfolioName, s.tickerSymbol, s.shareID, s.currentPrice 
+        FROM AccountAndShares aas
+        JOIN Shares s ON aas.shareID = s.shareID AND aas.tickerSymbol = s.tickerSymbol
+        JOIN Account a ON aas.portfolioID = a.portfolioID
+        WHERE a.User = ?;
+        """;
+
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, userEmail);
+                ResultSet rs = pstmt.executeQuery();
+
+                // Check if any rows were returned
+                boolean hasResults = false;
+
+                while (rs.next()) {
+                    hasResults = true; // At least one row exists
+                    System.out.printf("Portfolio: %s | Stock: %s | Share ID: %d | Price: %.2f\n",
+                            rs.getString("portfolioName"),
+                            rs.getString("tickerSymbol"),
+                            rs.getInt("shareID"),
+                            rs.getDouble("currentPrice"));
+                }
+
+                // If no results, print a message
+                if (!hasResults) {
+                    System.out.println("No shares found for the user: " + userEmail);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
+
 
 
     public void buyShares(String userEmail, String tickerSymbol, int shareID, double amount, int portfolioID) {
