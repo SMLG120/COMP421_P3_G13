@@ -44,34 +44,36 @@ public class StockDatabaseApp {
 
     public void buyShares(String userEmail, String tickerSymbol, int shareID, double amount) {
         String checkBalance = "SELECT balance FROM User WHERE email = ?";
-        String insertTransaction = """
-        INSERT INTO InvestmentTransactions 
-        (transactionDate, currency, amount, status, transactionOperationType, BrokerageFee, ShareTickerSymbol, ShareID, User)
-        VALUES (CURRENT_DATE, 'USD', ?, 'Completed', 'Buy', 10.00, ?, ?, ?);
-    """;
+        String getMaxTransactionID = "SELECT COALESCE(MAX(transactionID), 0) + 1 FROM InvestmentTransactions";
+        String insertTransaction = "INSERT INTO InvestmentTransactions "
+                + "(transactionID, transactionDate, currency, amount, status, transactionOperationType, BrokerageFee, ShareTickerSymbol, ShareID, User) "
+                + "VALUES (?, CURRENT_DATE, 'USD', ?, 'Completed', 'Buy', 10.00, ?, ?, ?)";
 
         try (PreparedStatement balanceStmt = conn.prepareStatement(checkBalance);
-             PreparedStatement insertStmt = conn.prepareStatement(insertTransaction, Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement maxIdStmt = conn.prepareStatement(getMaxTransactionID);
+             ResultSet maxIdResult = maxIdStmt.executeQuery();
+             PreparedStatement insertStmt = conn.prepareStatement(insertTransaction)) {
 
             balanceStmt.setString(1, userEmail);
             ResultSet rs = balanceStmt.executeQuery();
 
             if (rs.next() && rs.getDouble("balance") >= amount) {
-                insertStmt.setDouble(1, amount);
-                insertStmt.setString(2, tickerSymbol);
-                insertStmt.setInt(3, shareID);
-                insertStmt.setString(4, userEmail);
-                insertStmt.executeUpdate();
-
-                // Get the auto-generated transactionID
-                ResultSet generatedKeys = insertStmt.getGeneratedKeys();
-                if (generatedKeys.next()) {
-                    int transactionID = generatedKeys.getInt(1);
-                    System.out.println("Transaction successful! Transaction ID: " + transactionID);
-                } else {
-                    System.out.println("Transaction successful, but could not retrieve ID.");
+                int newTransactionID = 1; // Default to 1 if no transactions exist
+                if (maxIdResult.next()) {
+                    newTransactionID = maxIdResult.getInt(1);
                 }
 
+                insertStmt.setInt(1, newTransactionID);
+                insertStmt.setDouble(2, amount);
+                insertStmt.setString(3, tickerSymbol);
+                insertStmt.setInt(4, shareID);
+                insertStmt.setString(5, userEmail);
+
+                int rowsAffected = insertStmt.executeUpdate();
+
+                if (rowsAffected > 0) {
+                    System.out.println("Transaction successful! Transaction ID: " + newTransactionID);
+                }
             } else {
                 System.out.println("Insufficient balance.");
             }
@@ -79,6 +81,7 @@ public class StockDatabaseApp {
             e.printStackTrace();
         }
     }
+
 
 
     public void sellShares(String userEmail, String tickerSymbol, int shareID, double amount) {
