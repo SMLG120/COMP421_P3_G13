@@ -47,14 +47,19 @@ public class StockDatabaseApp {
         String getMaxTransactionID = "SELECT COALESCE(MAX(transactionID), 0) + 1 FROM InvestmentTransactions";
         String validatePortfolio = "SELECT portfolioID FROM Account WHERE portfolioID = ? AND \"USER\" = ?";
 
+        // Check if the share already exists in AccountAndShares
+        String checkShareExists = "SELECT 1 FROM AccountAndShares WHERE shareID = ? AND tickerSymbol = ?";
+
         String insertTransaction = "INSERT INTO InvestmentTransactions "
                 + "(transactionID, transactionDate, currency, amount, status, transactionOperationType, BrokerageFee, ShareTickerSymbol, ShareID, User) "
                 + "VALUES (?, CURRENT_DATE, 'USD', ?, 'Completed', 'Buy', 10.00, ?, ?, ?)";
+
         String insertAccountShare = "INSERT INTO AccountAndShares (shareID, tickerSymbol, portfolioID) VALUES (?, ?, ?)";
 
         try (PreparedStatement balanceStmt = conn.prepareStatement(checkBalance);
              PreparedStatement maxIdStmt = conn.prepareStatement(getMaxTransactionID);
              PreparedStatement validatePortfolioStmt = conn.prepareStatement(validatePortfolio);
+             PreparedStatement checkShareStmt = conn.prepareStatement(checkShareExists);
              PreparedStatement insertTransactionStmt = conn.prepareStatement(insertTransaction);
              PreparedStatement insertAccountShareStmt = conn.prepareStatement(insertAccountShare)) {
 
@@ -72,6 +77,16 @@ public class StockDatabaseApp {
                 if (!portfolioResult.next()) {
                     System.out.println("Invalid portfolio ID for the given user.");
                     return;
+                }
+
+                // Check if the share already exists in AccountAndShares
+                checkShareStmt.setInt(1, shareID);
+                checkShareStmt.setString(2, tickerSymbol);
+                ResultSet shareExistsResult = checkShareStmt.executeQuery();
+
+                if (shareExistsResult.next()) {
+                    System.out.println("This share is already owned by someone.");
+                    return; // Do not proceed with the transaction if the share already exists.
                 }
 
                 // Get new transaction ID
@@ -105,6 +120,7 @@ public class StockDatabaseApp {
             e.printStackTrace();
         }
     }
+
 
 
 
