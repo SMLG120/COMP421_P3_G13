@@ -156,45 +156,195 @@ public class StockDatabaseApp {
 
 
 
-    public void sellShares(String userEmail, String tickerSymbol, int shareID, double amount) {
-        String checkOwnership = """
-        SELECT COUNT(*) AS owned FROM AccountAndShares aas
-        JOIN Account a ON aas.portfolioID = a.portfolioID
-        WHERE a.User = ? AND aas.tickerSymbol = ? AND aas.shareID = ?;
+    /**
+     * Improves a user's watchlist by displaying current contents and providing recommendations
+     * based on similar companies or industry sectors.
+     */
+    public void improveWatchlist(int portfolioID) {
+        Scanner scanner = new Scanner(System.in);
+
+        // First, check if the portfolio exists and get the associated watchlist
+        String getWatchlistSql = """
+        SELECT w.WID, w.watchlistName, w.notificationMode
+        FROM Account a
+        JOIN Watchlist w ON a.Watchlist = w.WID
+        WHERE a.portfolioID = ?
     """;
-        String insertTransaction = """
-        INSERT INTO InvestmentTransactions 
-        (transactionDate, currency, amount, status, transactionOperationType, BrokerageFee, ShareTickerSymbol, ShareID, User)
-        VALUES (CURRENT_DATE, 'USD', ?, 'Completed', 'Sell', 10.00, ?, ?, ?);
+
+        // Get current watchlist contents
+        String getWatchlistContentsSql = """
+        SELECT s.tickerSymbol, s.shareID, s.currentPrice, c.name AS CompanyName, c.sector
+        FROM Watchlist w
+        JOIN WatchlistAndShares was ON w.WID = was.WID
+        JOIN Shares s ON was.shareID = s.shareID AND was.tickerSymbol = s.tickerSymbol
+        JOIN Stock st ON s.tickerSymbol = st.tickerSymbol
+        JOIN Company c ON st.Company = c.CUSIP
+        WHERE w.WID = ?
     """;
 
-        try (PreparedStatement ownershipStmt = conn.prepareStatement(checkOwnership);
-             PreparedStatement insertStmt = conn.prepareStatement(insertTransaction, Statement.RETURN_GENERATED_KEYS)) {
+        // Get similar company recommendations
+        String getRecommendationsSql = """
+        SELECT DISTINCT s.tickerSymbol, s.shareID, s.currentPrice, c.name AS CompanyName, c.sector,
+               'Similar Sector' AS RecommendationType
+        FROM Watchlist w
+        JOIN WatchlistAndShares was ON w.WID = was.WID
+        JOIN Shares ws ON was.shareID = ws.shareID AND was.tickerSymbol = ws.tickerSymbol
+        JOIN Stock wst ON ws.tickerSymbol = wst.tickerSymbol
+        JOIN Company wc ON wst.Company = wc.CUSIP
+        JOIN Company c ON c.sector = wc.sector
+        JOIN Stock st ON st.Company = c.CUSIP
+        JOIN Shares s ON s.tickerSymbol = st.tickerSymbol
+        WHERE w.WID = ?
+        AND NOT EXISTS (
+            SELECT 1
+            FROM WatchlistAndShares was2
+            WHERE was2.WID = w.WID
+            AND was2.shareID = s.shareID
+            AND was2.tickerSymbol = s.tickerSymbol
+        )
+        LIMIT 5
+    """;
 
-            ownershipStmt.setString(1, userEmail);
-            ownershipStmt.setString(2, tickerSymbol);
-            ownershipStmt.setInt(3, shareID);
-            ResultSet rs = ownershipStmt.executeQuery();
+        // SQL for updating notification mode
+        String updateNotificationModeSql = """
+        UPDATE Watchlist
+        SET notificationMode = 'On'
+        WHERE WID = ?
+    """;
 
-            if (rs.next() && rs.getInt("owned") > 0) {
-                insertStmt.setDouble(1, amount);
-                insertStmt.setString(2, tickerSymbol);
-                insertStmt.setInt(3, shareID);
-                insertStmt.setString(4, userEmail);
-                insertStmt.executeUpdate();
+        // SQL for adding share to watchlist
+        String addToWatchlistSql = """
+        INSERT INTO WatchlistAndShares (WID, shareID, tickerSymbol)
+        VALUES (?, ?, ?)
+    """;
 
-                // Get the auto-generated transactionID
-                ResultSet generatedKeys = insertStmt.getGeneratedKeys();
-                if (generatedKeys.next()) {
-                    int transactionID = generatedKeys.getInt(1);
-                    System.out.println("Shares sold successfully! Transaction ID: " + transactionID);
+        try {
+            int watchlistID = -1;
+            String watchlistName = "";
+            String notificationMode = "";
+
+            // Check if portfolio exists and get associated watchlist
+            try (PreparedStatement pstmt = conn.prepareStatement(getWatchlistSql)) {
+                pstmt.setInt(1, portfolioID);
+                ResultSet rs = pstmt.executeQuery();
+
+                if (rs.next()) {
+                    watchlistID = rs.getInt("WID");
+                    watchlistName = rs.getString("watchlistName");
+                    notificationMode = rs.getString("notificationMode");
+
+                    System.out.println("\nWatchlist: " + watchlistName + " (ID: " + watchlistID + ")");
+                    System.out.println("Current Notification Mode: " + notificationMode);
                 } else {
-                    System.out.println("Shares sold, but could not retrieve transaction ID.");
+                    System.out.println("Portfolio not found or has no associated watchlist.");
+                    return;
+                }
+            }
+
+            // Display current watchlist contents
+            System.out.println("\nCurrent Watchlist Contents:");
+            System.out.printf("%-10s %-10s %-30s %-15s %-10s\n",
+                    "Ticker", "Share ID", "Company", "Sector", "Price ($)");
+            System.out.println("-".repeat(80));
+
+            boolean hasContents = false;
+
+            try (PreparedStatement pstmt = conn.prepareStatement(getWatchlistContentsSql)) {
+                pstmt.setInt(1, watchlistID);
+                ResultSet rs = pstmt.executeQuery();
+
+                while (rs.next()) {
+                    hasContents = true;
+                    System.out.printf("%-10s %-10d %-30s %-15s $%-10.2f\n",
+                            rs.getString("tickerSymbol"),
+                            rs.getInt("shareID"),
+                            rs.getString("CompanyName"),
+                            rs.getString("sector"),
+                            rs.getDouble("currentPrice"));
                 }
 
-            } else {
-                System.out.println("Error: You do not own this stock.");
+                if (!hasContents) {
+                    System.out.println("No shares in watchlist yet.");
+                }
             }
+
+            // Get and display recommendations
+            System.out.println("\nRecommended Shares Based on Your Watchlist:");
+            System.out.printf("%-5s %-10s %-10s %-30s %-15s %-10s %-20s\n",
+                    "No.", "Ticker", "Share ID", "Company", "Sector", "Price ($)", "Recommendation Type");
+            System.out.println("-".repeat(100));
+
+            String[][] recommendations = new String[5][3]; // To store [tickerSymbol, shareID, price]
+            int count = 0;
+
+            try (PreparedStatement pstmt = conn.prepareStatement(getRecommendationsSql)) {
+                pstmt.setInt(1, watchlistID);
+                ResultSet rs = pstmt.executeQuery();
+
+                while (rs.next() && count < 5) {
+                    count++;
+                    String ticker = rs.getString("tickerSymbol");
+                    int shareID = rs.getInt("shareID");
+
+                    recommendations[count-1][0] = ticker;
+                    recommendations[count-1][1] = String.valueOf(shareID);
+
+                    System.out.printf("%-5d %-10s %-10d %-30s %-15s $%-10.2f %-20s\n",
+                            count,
+                            ticker,
+                            shareID,
+                            rs.getString("CompanyName"),
+                            rs.getString("sector"),
+                            rs.getDouble("currentPrice"),
+                            rs.getString("RecommendationType"));
+                }
+
+                if (count == 0) {
+                    System.out.println("No recommendations available.");
+                    return;
+                }
+            }
+
+            // Prompt user to add a recommended share to watchlist
+            System.out.print("\nEnter the number of the share to add to your watchlist (1-" + count + ") or 0 to cancel: ");
+            int selection = scanner.nextInt();
+            scanner.nextLine(); // Consume newline
+
+            if (selection > 0 && selection <= count) {
+                // Get selected recommendation data
+                String tickerSymbol = recommendations[selection-1][0];
+                int shareID = Integer.parseInt(recommendations[selection-1][1]);
+
+                // First ensure notification mode is 'On'
+                if (!notificationMode.equals("On")) {
+                    try (PreparedStatement pstmt = conn.prepareStatement(updateNotificationModeSql)) {
+                        pstmt.setInt(1, watchlistID);
+                        int rowsAffected = pstmt.executeUpdate();
+
+                        if (rowsAffected > 0) {
+                            System.out.println("Notification mode set to 'On'.");
+                        }
+                    }
+                }
+
+                // Add share to watchlist
+                try (PreparedStatement pstmt = conn.prepareStatement(addToWatchlistSql)) {
+                    pstmt.setInt(1, watchlistID);
+                    pstmt.setInt(2, shareID);
+                    pstmt.setString(3, tickerSymbol);
+
+                    int rowsAffected = pstmt.executeUpdate();
+
+                    if (rowsAffected > 0) {
+                        System.out.println("Share added to watchlist successfully!");
+                    } else {
+                        System.out.println("Failed to add share to watchlist.");
+                    }
+                }
+            } else if (selection != 0) {
+                System.out.println("Invalid selection.");
+            }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
