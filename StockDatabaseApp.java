@@ -9,10 +9,10 @@ public class StockDatabaseApp {
     private Connection conn;
     public StockDatabaseApp() {
         try {
-            // Replace with your DB2 database credentials
+            //DB2 database credentials
             String url = "jdbc:db2://winter2025-comp421.cs.mcgill.ca:50000/comp421"; // Double check if it's the right link!!!!
-            String user = "cs421g13"; // Not sure
-            String password = "COMP421team"; // Also not sure
+            String user = "cs421g13";
+            String password = "COMP421team";
         
             conn = DriverManager.getConnection(url, user, password);
             System.out.println("Connected to DB2 successfully!");
