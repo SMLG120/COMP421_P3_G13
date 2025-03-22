@@ -198,29 +198,70 @@ public class StockDatabaseApp {
     }
 
 
-    public void viewStockTransactionHistory(String tickerSymbol) {
-        String sql = """
-        SELECT transactionID, transactionDate, amount, status, transactionOperationType, User 
-        FROM InvestmentTransactions WHERE ShareTickerSymbol = ?
-        ORDER BY transactionDate DESC;
+    public void completePendingSellTransactions() {
+        String checkPendingTransactionsSql = """
+        SELECT COUNT(*) AS count FROM InvestmentTransactions
+        WHERE status = 'Pending' AND transactionOperationType = 'Sell';
     """;
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, tickerSymbol);
-            ResultSet rs = pstmt.executeQuery();
+        String updateTransactionsSql = """
+        UPDATE InvestmentTransactions
+        SET status = 'Completed'
+        WHERE status = 'Pending' AND transactionOperationType = 'Sell';
+    """;
 
-            while (rs.next()) {
-                System.out.printf("Transaction ID: %d | Date: %s | Amount: %.2f | Type: %s | User: %s\n",
-                        rs.getInt("transactionID"),
-                        rs.getDate("transactionDate"),
-                        rs.getDouble("amount"),
-                        rs.getString("transactionOperationType"),
-                        rs.getString("User"));
+        String updateAccountTotalValueSql = """
+        UPDATE Account
+        SET totalValue = totalValue - COALESCE((
+            SELECT SUM(amount) 
+            FROM InvestmentTransactions 
+            WHERE status = 'Completed' AND transactionOperationType = 'Sell' 
+            AND Account.User = InvestmentTransactions.User
+        ), 0)
+        WHERE EXISTS (
+            SELECT 1 FROM InvestmentTransactions 
+            WHERE status = 'Completed' AND transactionOperationType = 'Sell' 
+            AND Account.User = InvestmentTransactions.User
+        );
+    """;
+
+        String deleteSharesSql = """
+        DELETE FROM AccountAndShares
+        WHERE shareID IN (
+            SELECT ShareID FROM InvestmentTransactions
+            WHERE status = 'Completed' AND transactionOperationType = 'Sell'
+        );
+    """;
+
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkPendingTransactionsSql)) {
+
+            rs.next();
+            int pendingTransactions = rs.getInt("count");
+
+            if (pendingTransactions == 0) {
+                System.out.println("No pending sell transactions to process.");
+                return;
             }
+
+            // Update transactions to "Completed"
+            int updatedTransactions = stmt.executeUpdate(updateTransactionsSql);
+            System.out.println(updatedTransactions + " pending sell transactions marked as completed.");
+
+            // Deduct the sold amount from associated accounts
+            int updatedAccounts = stmt.executeUpdate(updateAccountTotalValueSql);
+            System.out.println(updatedAccounts + " accounts updated with reduced total value.");
+
+            // Remove sold shares from AccountAndShares
+            int deletedShares = stmt.executeUpdate(deleteSharesSql);
+            System.out.println(deletedShares + " shares removed from AccountAndShares.");
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
+
+
 
 
     public void identifyAtRiskUsers() {

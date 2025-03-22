@@ -12,7 +12,7 @@ public class Application {
             System.out.println("1. View all shares from a user");
             System.out.println("2. Buy shares (Investment Transaction)");
             System.out.println("3. Sell shares (Investment Transaction)");
-            System.out.println("4. View transaction history for a stock");
+            System.out.println("4. Approve pending selling transactions");
             System.out.println("5. Identify users at risk (single-sector investment)");
             System.out.println("6. Quit");
             System.out.print("Enter your choice: ");
@@ -51,9 +51,7 @@ public class Application {
                     app.sellShares(userEmail, tickerSymbol, shareID, amount);
                     break;
                 case 4:
-                    System.out.print("Enter stock ticker symbol: ");
-                    tickerSymbol = scanner.nextLine();
-                    app.viewStockTransactionHistory(tickerSymbol);
+                    app.completePendingSellTransactions();
                     break;
                 case 5:
                     app.identifyAtRiskUsers();
