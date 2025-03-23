@@ -11,9 +11,9 @@ public class Application {
             System.out.println("\nStock Management System - Main Menu:");
             System.out.println("1. View all shares from a user");
             System.out.println("2. Buy shares (Investment Transaction)");
-            System.out.println("3. Sell shares (Investment Transaction)");
+            System.out.println("3. Add to a watchlist");
             System.out.println("4. Approve pending selling transactions");
-            System.out.println("5. Identify users at risk (single-sector investment)");
+            System.out.println("5. Identify users at risk (single-sector investment) and help them");
             System.out.println("6. Quit");
             System.out.print("Enter your choice: ");
 
@@ -25,6 +25,7 @@ public class Application {
                     System.out.print("Enter user email: ");
                     String userEmail = scanner.nextLine();
                     app.viewUserPortfolio(userEmail);
+                    try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
                 case 2:
                     System.out.print("Enter user email: ");
@@ -38,23 +39,23 @@ public class Application {
                     System.out.print("Enter portfolio ID: ");
                     int portfolioID = scanner.nextInt();
                     app.buyShares(userEmail, tickerSymbol, shareID, amount, portfolioID);
+                    try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
                 case 3:
-                    System.out.print("Enter user email: ");
-                    userEmail = scanner.nextLine();
-                    System.out.print("Enter ticker symbol: ");
-                    tickerSymbol = scanner.nextLine();
-                    System.out.print("Enter share ID: ");
-                    shareID = scanner.nextInt();
-                    System.out.print("Enter amount: ");
-                    amount = scanner.nextDouble();
-                    app.sellShares(userEmail, tickerSymbol, shareID, amount);
+                    // Prompt user for portfolio ID
+                    System.out.print("Enter your portfolio ID: ");
+                    int portfolioID3 = scanner.nextInt();
+                    scanner.nextLine(); // Consume newline
+                    app.improveWatchlist(portfolioID3);
+                    try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
                 case 4:
                     app.completePendingSellTransactions();
+                    try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
                 case 5:
                     app.identifyAtRiskUsers();
+                    try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
                 case 6:
                     System.out.println("Exiting...");
