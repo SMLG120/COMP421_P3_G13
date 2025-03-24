@@ -1,49 +1,48 @@
--- Begin creating the stored procedure
-CREATE PROCEDURE update_portfolio_total_value(IN user_email VARCHAR(255))
+CREATE OR REPLACE PROCEDURE UpdatePortfolioTotalValue (IN user_email VARCHAR(255))
+LANGUAGE SQL
 BEGIN
     -- Declare local variables
-    DECLARE shareID INT DEFAULT 0;
+    DECLARE shareID INT;
     DECLARE tickerSymbol VARCHAR(10);
     DECLARE quantity INT;
     DECLARE currentPrice DECIMAL(10, 2);
     DECLARE totalValue DECIMAL(10, 2) DEFAULT 0;
     DECLARE done INT DEFAULT 0;
 
-    -- Declare the cursor for fetching shares of the user
+    -- Declare cursor
     DECLARE SHARE_CURSOR CURSOR FOR
-        SELECT s.share_id, s.ticker_symbol, s.quantity, s.current_price
-        FROM shares s
-        JOIN portfolio p ON s.portfolio_id = p.portfolio_id
-        WHERE p.user_email = user_email;
+        SELECT s.shareID, s.tickerSymbol, aas.quantity, s.currentPrice
+        FROM Shares s
+        JOIN AccountAndShares aas ON s.shareID = aas.shareID AND s.tickerSymbol = aas.tickerSymbol
+        JOIN Account a ON aas.portfolioID = a.portfolioID
+        WHERE a.User = :user_email;
 
-    -- Declare a continue handler for the cursor to handle the end of the cursor
+    -- Declare handler for no more records
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
     -- Open the cursor
     OPEN SHARE_CURSOR;
 
-    -- Loop through each share in the cursor
+    -- Loop through the cursor
     fetch_loop: LOOP
         FETCH SHARE_CURSOR INTO shareID, tickerSymbol, quantity, currentPrice;
 
-        -- Exit the loop if there are no more rows
+        -- Exit loop if no more records
         IF done = 1 THEN
             LEAVE fetch_loop;
         END IF;
 
-        -- Calculate the total value of the portfolio (e.g., share quantity * price)
+        -- Calculate the total value
         SET totalValue = totalValue + (quantity * currentPrice);
-
     END LOOP;
 
     -- Close the cursor
     CLOSE SHARE_CURSOR;
 
-    -- Update the total value of the portfolio in the portfolio table
-    UPDATE portfolio
-    SET total_value = totalValue
-    WHERE user_email = user_email;
+    -- Update the total value in the Account table
+    UPDATE Account SET totalValue = totalValue WHERE User = :user_email;
 
-    -- Optionally, signal success or failure (handle errors)
-    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'Procedure executed successfully';
+    -- Optionally, return the total value
+    SELECT totalValue;
+
 END;

@@ -1,55 +1,79 @@
-CREATE OR REPLACE PROCEDURE CloseCompanyAndUpdateShares (
-    IN companyCUSIP VARCHAR(20)  -- Input: Company CUSIP
-)
+-- CloseCompanyAndUpdateShares.sql
+
+CREATE OR REPLACE PROCEDURE CleanupClosedCompanies()
 LANGUAGE SQL
 BEGIN ATOMIC
-    -- Declare variables
     DECLARE done INT DEFAULT 0;
+    DECLARE companyName VARCHAR(50);
+    DECLARE companyCUSIP VARCHAR(20);
     DECLARE shareID_var INT;
     DECLARE tickerSymbol_var VARCHAR(10);
-    DECLARE shareQuantity INT;
-    DECLARE accountPortfolioID INT;
-    DECLARE totalDeduction DECIMAL(15,2);
-    DECLARE sharePrice DECIMAL(15,2);
-    DECLARE brokerageFee DECIMAL(15,2) DEFAULT 5.00;
+    DECLARE portfolioID_var INT;
 
-    -- Cursor to fetch affected shares
+    -- Cursor to loop through all closed companies
+    DECLARE company_cursor CURSOR FOR
+        SELECT CUSIP, name FROM Company WHERE status = 'Closed';
+
+    -- Declare cursor for shares of a company
     DECLARE share_cursor CURSOR FOR
-        SELECT s.shareID, s.tickerSymbol, a.portfolioID, a.quantity, s.currentPrice
+        SELECT s.shareID, s.tickerSymbol, a.portfolioID
         FROM Shares s
         JOIN AccountAndShares a ON s.shareID = a.shareID
-        WHERE s.tickerSymbol IN (SELECT tickerSymbol FROM Stock WHERE CUSIP = companyCUSIP);
+        WHERE s.tickerSymbol IN (
+            SELECT tickerSymbol FROM Stock WHERE Company = companyName
+        );
 
-    -- Handle end of cursor fetch
+    -- Continue handler to exit loop
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
-    -- Update company status
-    UPDATE Company SET status = 'Closed' WHERE CUSIP = companyCUSIP;
+    -- Open company cursor
+    OPEN company_cursor;
 
-    -- Set share prices to 0 for the closed company
-    UPDATE Shares SET currentPrice = 0, openingPrice = 0
-    WHERE tickerSymbol IN (SELECT tickerSymbol FROM Stock WHERE CUSIP = companyCUSIP);
-
-    -- Open the cursor
-    OPEN share_cursor;
-
-    -- Process each row in cursor
-    read_loop: LOOP
-        FETCH share_cursor INTO shareID_var, tickerSymbol_var, accountPortfolioID, shareQuantity, sharePrice;
+    company_loop: LOOP
+        FETCH company_cursor INTO companyCUSIP, companyName;
         IF done = 1 THEN
-            LEAVE read_loop;
+            LEAVE company_loop;
         END IF;
 
-        -- Calculate total deduction (share price * quantity + brokerage fee)
-        SET totalDeduction = (shareQuantity * sharePrice) + brokerageFee;
+        -- Step 1: Set share prices to 0 for the closed company
+        UPDATE Shares
+        SET currentPrice = 0, openingPrice = 0
+        WHERE tickerSymbol IN (
+            SELECT tickerSymbol FROM Stock WHERE Company = companyName
+        );
 
-        -- Deduct value from account
-        UPDATE Account SET totalValue = totalValue - totalDeduction WHERE portfolioID = accountPortfolioID;
+        -- Step 2: Open cursor for shares in the company
+        OPEN share_cursor;
 
-        -- Set quantity of shares to 0
-        UPDATE AccountAndShares SET quantity = 0 WHERE shareID = shareID_var;
+        share_loop: LOOP
+            FETCH share_cursor INTO shareID_var, tickerSymbol_var, portfolioID_var;
+            IF done = 1 THEN
+                LEAVE share_loop;
+            END IF;
+
+            -- Step 3: Set totalValue in Account to 0 for affected portfolios
+            UPDATE Account
+            SET totalValue = 0
+            WHERE portfolioID = portfolioID_var;
+
+            -- Step 4: Remove shares from AccountAndShares
+            DELETE FROM AccountAndShares WHERE shareID = shareID_var;
+        END LOOP;
+
+        -- Close share cursor
+        CLOSE share_cursor;
+
+        -- Step 5: Remove the company’s stocks
+        DELETE FROM Stock WHERE Company = companyName;
+
+        -- Step 6: Delete the company
+        DELETE FROM Company WHERE CUSIP = companyCUSIP;
     END LOOP;
 
-    -- Close the cursor
-    CLOSE share_cursor;
-END;
+    -- Close company cursor
+    CLOSE company_cursor;
+
+    -- Success message
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'All closed companies and their data have been removed.';
+END
+@
