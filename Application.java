@@ -18,7 +18,7 @@ public class Application {
             System.out.print("Enter your choice: ");
 
             int choice = scanner.nextInt();
-            scanner.nextLine();  // Consume newline
+            scanner.nextLine(); 
 
             switch (choice) {
                 case 1:
@@ -42,10 +42,9 @@ public class Application {
                     try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
                 case 3:
-                    // Prompt user for portfolio ID
                     System.out.print("Enter your portfolio ID: ");
                     int portfolioID3 = scanner.nextInt();
-                    scanner.nextLine(); // Consume newline
+                    scanner.nextLine(); 
                     app.improveWatchlist(portfolioID3);
                     try { Thread.sleep(2000); } catch (Exception e) {}
                     break;
