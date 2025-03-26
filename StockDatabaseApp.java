@@ -21,7 +21,7 @@ public class StockDatabaseApp {
         }
     }
     public void viewUserPortfolio(String userEmail) {
-        // First, check if the user exists in the Account table
+        //checking if the user exists in the Account table
         String checkUserSql = "SELECT * FROM Account WHERE \"USER\" = ? LIMIT 1";
 
         try (PreparedStatement checkUserStmt = conn.prepareStatement(checkUserSql)) {
@@ -29,12 +29,11 @@ public class StockDatabaseApp {
             ResultSet userRs = checkUserStmt.executeQuery();
 
             if (!userRs.next()) {
-                // User not found
                 System.out.println("User with email " + userEmail + " is not associated with any portfolio.");
-                return; // Exit the method if user is not found
+                return;
             }
 
-            // Now that we know the user exists, proceed with fetching the portfolio details
+            //etching the portfolio details
             String sql = """
         SELECT a.portfolioName, s.tickerSymbol, s.shareID, s.currentPrice 
         FROM AccountAndShares aas
@@ -51,7 +50,7 @@ public class StockDatabaseApp {
                 boolean hasResults = false;
 
                 while (rs.next()) {
-                    hasResults = true; // At least one row exists
+                    hasResults = true;
                     System.out.printf("Portfolio: %s | Stock: %s | Share ID: %d | Price: %.2f\n",
                             rs.getString("portfolioName"),
                             rs.getString("tickerSymbol"),
@@ -59,7 +58,7 @@ public class StockDatabaseApp {
                             rs.getDouble("currentPrice"));
                 }
 
-                // If no results, print a message
+                
                 if (!hasResults) {
                     System.out.println("No shares found for the user: " + userEmail);
                 }
@@ -117,7 +116,7 @@ public class StockDatabaseApp {
 
                 if (shareExistsResult.next()) {
                     System.out.println("This share is already owned by someone.");
-                    return; // Do not proceed with the transaction if the share already exists.
+                    return; 
                 }
 
                 // Get new transaction ID
@@ -163,7 +162,7 @@ public class StockDatabaseApp {
     public void improveWatchlist(int portfolioID) {
         Scanner scanner = new Scanner(System.in);
 
-        // First, check if the portfolio exists and get the associated watchlist
+        // checking if the portfolio exists and get the associated watchlist
         String getWatchlistSql = """
         SELECT w.WID, w.watchlistName, w.notificationMode
         FROM Account a
@@ -205,14 +204,14 @@ public class StockDatabaseApp {
         LIMIT 5
     """;
 
-        // SQL for updating notification mode
+        // updating notification mode
         String updateNotificationModeSql = """
         UPDATE Watchlist
         SET notificationMode = 'On'
         WHERE WID = ?
     """;
 
-        // SQL for adding share to watchlist
+        //adding share to watchlist
         String addToWatchlistSql = """
         INSERT INTO WatchlistAndShares (WID, shareID, tickerSymbol)
         VALUES (?, ?, ?)
@@ -274,7 +273,7 @@ public class StockDatabaseApp {
                     "No.", "Ticker", "Share ID", "Company", "Sector", "Price ($)", "Recommendation Type");
             System.out.println("-".repeat(100));
 
-            String[][] recommendations = new String[5][3]; // To store [tickerSymbol, shareID, price]
+            String[][] recommendations = new String[5][3]; 
             int count = 0;
 
             try (PreparedStatement pstmt = conn.prepareStatement(getRecommendationsSql)) {
@@ -315,7 +314,7 @@ public class StockDatabaseApp {
                 String tickerSymbol = recommendations[selection-1][0];
                 int shareID = Integer.parseInt(recommendations[selection-1][1]);
 
-                // First ensure notification mode is 'On'
+                //  ensuring notification mode is 'On'
                 if (!notificationMode.equals("On")) {
                     try (PreparedStatement pstmt = conn.prepareStatement(updateNotificationModeSql)) {
                         pstmt.setInt(1, watchlistID);
@@ -485,7 +484,7 @@ public class StockDatabaseApp {
      * and allows the user to purchase a recommended stock
      */
     private void recommendDiversificationStocks(String userEmail) {
-        // First, identify the user's current sector
+        // identifying user's current unique sector
         String getCurrentSectorSql = """
         SELECT DISTINCT c.sector
         FROM AccountAndShares aas
@@ -530,7 +529,7 @@ public class StockDatabaseApp {
         LIMIT 5
     """;
 
-        // Get user portfolios
+        // Getting user portfolios
         String getUserPortfoliosSql = """
         SELECT portfolioID, portfolioName
         FROM Account
@@ -538,7 +537,7 @@ public class StockDatabaseApp {
     """;
 
         try {
-            // Get user's current sector
+            // Getting user's current sector
             String currentSector = "";
             try (PreparedStatement pstmt = conn.prepareStatement(getCurrentSectorSql)) {
                 pstmt.setString(1, userEmail);
@@ -551,7 +550,7 @@ public class StockDatabaseApp {
                 }
             }
 
-            // Get recommended stocks
+            // Getting recommended stocks
             try (PreparedStatement pstmt = conn.prepareStatement(recommendationSql)) {
                 pstmt.setString(1, currentSector);
                 ResultSet rs = pstmt.executeQuery();
@@ -561,7 +560,7 @@ public class StockDatabaseApp {
                         "No.", "Ticker", "Company", "Sector", "Share ID", "Price ($)");
 
                 int count = 0;
-                String[][] recommendations = new String[5][3]; // To store [tickerSymbol, shareID, price]
+                String[][] recommendations = new String[5][3];
 
                 while (rs.next() && count < 5) {
                     count++;
@@ -591,10 +590,10 @@ public class StockDatabaseApp {
                 Scanner scanner = new Scanner(System.in);
                 System.out.print("\nEnter the number of the stock you want to buy (1-" + count + ") or 0 to cancel: ");
                 int selection = scanner.nextInt();
-                scanner.nextLine(); // Consume newline
+                scanner.nextLine();
 
                 if (selection > 0 && selection <= count) {
-                    // Get user portfolios
+                    // Getting user portfolios
                     List<Integer> portfolioIDs = new ArrayList<>();
                     List<String> portfolioNames = new ArrayList<>();
 
@@ -623,14 +622,14 @@ public class StockDatabaseApp {
 
                         System.out.print("Enter portfolio ID to buy the stock: ");
                         int portfolioID = scanner.nextInt();
-                        scanner.nextLine(); // Consume newline
+                        scanner.nextLine(); 
 
-                        // Get selected recommendation data
+                        // Getting selected recommendation data
                         String tickerSymbol = recommendations[selection-1][0];
                         int shareID = Integer.parseInt(recommendations[selection-1][1]);
                         double price = Double.parseDouble(recommendations[selection-1][2]);
 
-                        // Call buyShares method with the collected data
+                        // Calling buyShares method with the collected data
                         buyShares(userEmail, tickerSymbol, shareID, price, portfolioID);
                     }
                 } else if (selection != 0) {
