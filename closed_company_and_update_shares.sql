@@ -1,20 +1,23 @@
--- CloseCompanyAndUpdateShares.sql
-
-CREATE OR REPLACE PROCEDURE CleanupClosedCompanies()
+CREATE OR REPLACE PROCEDURE CleanupCompanies(
+    IN p_company_status VARCHAR(20) DEFAULT 'Closed'
+)
 LANGUAGE SQL
-BEGIN ATOMIC
+BEGIN
+    -- Track whether we've finished processing all companies
     DECLARE done INT DEFAULT 0;
+    
+    -- Variables to store company details during processing
     DECLARE companyName VARCHAR(50);
     DECLARE companyCUSIP VARCHAR(20);
     DECLARE shareID_var INT;
     DECLARE tickerSymbol_var VARCHAR(10);
     DECLARE portfolioID_var INT;
-
-    -- Cursor to loop through all closed companies
+    
+    -- Find all companies matching the specified status
     DECLARE company_cursor CURSOR FOR
-        SELECT CUSIP, name FROM Company WHERE status = 'Closed';
-
-    -- Declare cursor for shares of a company
+        SELECT CUSIP, name FROM Company WHERE status = p_company_status;
+    
+    -- Find all shares associated with each company we're processing
     DECLARE share_cursor CURSOR FOR
         SELECT s.shareID, s.tickerSymbol, a.portfolioID
         FROM Shares s
@@ -22,58 +25,67 @@ BEGIN ATOMIC
         WHERE s.tickerSymbol IN (
             SELECT tickerSymbol FROM Stock WHERE Company = companyName
         );
-
-    -- Continue handler to exit loop
+    
+    -- Stop the loop when we've processed all companies
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
-
-    -- Open company cursor
+    
+    -- Make sure we're only cleaning up valid company statuses
+    IF p_company_status NOT IN ('Active', 'Closed') THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Invalid company status. Must be "Active" or "Closed".';
+    END IF;
+    
+    -- Start processing companies
     OPEN company_cursor;
-
+    
     company_loop: LOOP
+        -- Get the next company to process
         FETCH company_cursor INTO companyCUSIP, companyName;
         IF done = 1 THEN
             LEAVE company_loop;
         END IF;
-
-        -- Step 1: Set share prices to 0 for the closed company
+        
+        -- Zero out share prices for this company
         UPDATE Shares
         SET currentPrice = 0, openingPrice = 0
         WHERE tickerSymbol IN (
             SELECT tickerSymbol FROM Stock WHERE Company = companyName
         );
-
-        -- Step 2: Open cursor for shares in the company
+        
+        -- Reset tracking for share processing
+        SET done = 0;
+        
+        -- Start processing shares for this company
         OPEN share_cursor;
-
         share_loop: LOOP
             FETCH share_cursor INTO shareID_var, tickerSymbol_var, portfolioID_var;
             IF done = 1 THEN
                 LEAVE share_loop;
             END IF;
-
-            -- Step 3: Set totalValue in Account to 0 for affected portfolios
+            
+            -- Clear out the total value of portfolios with these shares
             UPDATE Account
             SET totalValue = 0
             WHERE portfolioID = portfolioID_var;
-
-            -- Step 4: Remove shares from AccountAndShares
+            
+            -- Remove these shares from all accounts
             DELETE FROM AccountAndShares WHERE shareID = shareID_var;
         END LOOP;
-
-        -- Close share cursor
+        
+        -- Close the share cursor
         CLOSE share_cursor;
-
-        -- Step 5: Remove the company’s stocks
+        
+        -- Remove all stock records for this company
         DELETE FROM Stock WHERE Company = companyName;
-
-        -- Step 6: Delete the company
+        
+        -- Finally, delete the company itself
         DELETE FROM Company WHERE CUSIP = companyCUSIP;
+        
+        -- Reset for next company
+        SET done = 0;
     END LOOP;
-
-    -- Close company cursor
+    
+    -- Close the company cursor
     CLOSE company_cursor;
+END;
 
-    -- Success message
-    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'All closed companies and their data have been removed.';
-END
-@
